@@ -12,7 +12,7 @@ export class MonthlyhReportGenerator {
         this.app = app;
     }
 
-    public generateCurMonth(): void {
+    public generateCurMonth(): Promise<void> {
 
         let that = this;
         let app = that.app;
@@ -34,10 +34,7 @@ export class MonthlyhReportGenerator {
         }
 
         promise = promise.then((resultFile: TFile) => {
-            // TODO: Можно оптимизировать и смотреть какая дата сейчас
             let dates = Array.from({ length: moment(curDate).daysInMonth() }, (x, i) => moment().startOf('month').add(i, 'days').format(this.settings.dailyFileNameTemplate));
-            console.log(dates);
-
             let result: string[] = [];
             dates.forEach(date => {
                 let file = vault.getAbstractFileByPath(this.settings.dailyFileDirPath + "/" + date + ".md");
@@ -50,16 +47,12 @@ export class MonthlyhReportGenerator {
                     }
                 }
             });
-
-            let resultStr: string = result.join("\n");
-            console.log(resultStr);
-
-            vault.modify(resultFile, resultStr);
-            return curFile;
+            vault.modify(resultFile, result.join("\n"));
+            return resultFile;
         });
 
         promise = promise.then((resultFile) => workSpace.activeLeaf.openFile(resultFile));
 
-        Promise.all([promise]);
+        return promise;
     }
 }

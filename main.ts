@@ -12,28 +12,9 @@ export default class MyPlugin extends Plugin {
 		await this.loadSettings();
 
 		this.addSettingTab(new SimpleSettingsTab(this.app, this));
-		this.settings.orderByDesc = true;
 		this.generator = new MonthlyhReportGenerator(this.app, this.settings);
 
-		this.addCommand({
-			id: 'generate-monthly-report',
-			name: 'Generate monthly report',
-			callback: () => {
-				console.log(this);
-				console.log("callback");
-			},
-			checkCallback: (checking: boolean) => {
-				console.log("checking: " + checking);
-
-				// Если выполнение команды
-				if (!checking) {
-					console.log("executing");
-					this.generator.generateCurMonth();
-				}
-
-				return true;
-			}
-		});
+		this._initCommands();
 	}
 
 	onunload() {
@@ -46,6 +27,45 @@ export default class MyPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	private _initCommands(): void {
+		this.addCommand({
+			id: "open-cur-month",
+			name: "Open cur month",
+			checkCallback: (checking: boolean) => {
+				if (!checking) {
+					let app = this.app;
+					let date = moment().format(this.settings.resultFileNameTemplate);
+					let file = app.vault.getAbstractFileByPath(this.settings.resultFileDirPath + "/" + date + ".md") as TFile;
+
+					let promise = null;
+					if (!file) {
+						promise = this.generator.generateCurMonth();
+					}
+					else {
+						app.workspace.activeLeaf.openFile(file);
+					}
+				}
+				return true;
+			}
+		});
+
+		this.addCommand({
+			id: 'generate-monthly-report',
+			name: 'Generate monthly report',
+			checkCallback: (checking: boolean) => {
+				console.log("checking: " + checking);
+
+				// Если выполнение команды
+				if (!checking) {
+					console.log("executing");
+					this.generator.generateCurMonth();
+				}
+
+				return true;
+			}
+		});
 	}
 }
 class SimpleSettingsTab extends PluginSettingTab {
@@ -60,28 +80,59 @@ class SimpleSettingsTab extends PluginSettingTab {
 		let { containerEl } = this;
 		containerEl.empty();
 		containerEl.createEl('h2', {
-			text: "Settings for MonthReportGenerator",
+			text: "Settings for Monthly",
 		});
-
-		let settings = this.plugin.settings;
-		this.getSettings(containerEl, "resultFilePath", settings, set => set.resultFileDirPath, (set, val) => set.resultFileDirPath = val);
-		this.getSettings(containerEl, "resultFileNameTemplate", settings, set => set.resultFileNameTemplate, (set, val) => set.resultFileNameTemplate = val);
 
 		let root = this.app.vault.getRoot();
 		let children = this.getRecursiveDirs(root);
-		let isExists = !!children.find(ch => ch.path === settings.dailyFileDirPath);
 
-		if (!isExists) {
+		let settings = this.plugin.settings;
+
+		let isResultExists = !!children.find(ch => ch.path === settings.resultFileDirPath);
+		if (!isResultExists) {
+			settings.resultFileDirPath = "/";
+			this.plugin.saveData(settings);
+		}
+
+		let resultVal = this.plugin.settings.resultFileDirPath;
+		new Setting(containerEl)
+			.setName("Result file location")
+			.setDesc("Monthly notes will be placed here")
+			.addDropdown(dd => {
+				children.forEach(ch => {
+					dd.addOption(ch.path, ch.path);
+				});
+
+				dd
+					.setValue(resultVal)
+					.onChange(async (value) => {
+						settings.resultFileDirPath = value;
+						this.plugin.saveData(settings);
+					});
+			});
+
+		new Setting(containerEl)
+			.setName("Monthly date format")
+			.addText(text => {
+				text
+					.setPlaceholder("YYYY.MM")
+					.setValue(settings.resultFileNameTemplate ?? "")
+					.onChange(async (value) => {
+						settings.resultFileNameTemplate = value;
+						this.plugin.saveData(settings);
+					});
+			});
+
+		let isDailyExists = !!children.find(ch => ch.path === settings.dailyFileDirPath);
+		if (!isDailyExists) {
 			settings.dailyFileDirPath = "/";
 			this.plugin.saveData(settings);
 		}
 
 		let val = this.plugin.settings.dailyFileDirPath;
-
-
 		new Setting(containerEl)
-			.setName("dailyFilePath")
-			.setDesc("dailyFilePath")
+			.setName("Daily file location")
+			.setDesc("Will look for daily notes here")
 			.addDropdown(dd => {
 				children.forEach(ch => {
 					dd.addOption(ch.path, ch.path);
@@ -95,7 +146,29 @@ class SimpleSettingsTab extends PluginSettingTab {
 					});
 			});
 
-		this.getSettings(containerEl, "dailyFileNameTemplate", settings, set => set.dailyFileNameTemplate, (set, val) => set.dailyFileNameTemplate = val);
+		new Setting(containerEl)
+			.setName("Daily date format")
+			.addText(text => {
+				text
+					.setPlaceholder("YYYY-MM-DD")
+					.setValue(settings.dailyFileNameTemplate ?? "")
+					.onChange(async (value) => {
+						settings.dailyFileNameTemplate = value;
+						this.plugin.saveData(settings);
+					});
+			});
+
+		new Setting(containerEl)
+			.setName("Order by desc")
+			.setDesc("Links will be sorted by descending")
+			.addToggle(x => {
+				x
+					.setValue(!!settings.orderByDesc)
+					.onChange(async (val) => {
+						settings.orderByDesc = val;
+						this.plugin.saveData(settings);
+					})
+			});
 	}
 
 	private getRecursiveDirs(root: TFolder): TFolder[] {
@@ -120,22 +193,4 @@ class SimpleSettingsTab extends PluginSettingTab {
 
 		return result;
 	}
-
-	private getSettings(containerEl: HTMLElement, settingName: string, settings: IPluginSettings, propGetter: (settings: IPluginSettings) => string, propSetter: (settings: IPluginSettings, value: string) => void): Setting {
-		let value = propGetter(settings) ?? "";
-
-		return new Setting(containerEl)
-			.setName(settingName)
-			.setDesc(settingName)
-			.addText(text => {
-				text
-					.setPlaceholder(settingName)
-					.setValue(value)
-					.onChange(async (value) => {
-						propSetter(settings, value);
-						this.plugin.saveData(settings);
-					});
-			});
-	}
-
 }
