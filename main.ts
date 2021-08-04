@@ -1,56 +1,39 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
-
-interface MyPluginSettings {
-	mySetting: string;
-}
-
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
-}
+import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, TAbstractFile, TFolder, Vault, moment, TFile } from 'obsidian';
+import { IPluginSettings } from 'IPluginSettings';
+import { MonthlyhReportGenerator } from 'MonthlyReportGenerator';
 
 export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+
+	settings: IPluginSettings;
+	generator: MonthlyhReportGenerator;
 
 	async onload() {
 		console.log('loading plugin');
-
 		await this.loadSettings();
 
-		this.addRibbonIcon('dice', 'Sample Plugin', () => {
-			new Notice('This is a notice!');
-		});
-
-		this.addStatusBarItem().setText('Status Bar Text');
+		this.addSettingTab(new SimpleSettingsTab(this.app, this));
+		this.settings.orderByDesc = true;
+		this.generator = new MonthlyhReportGenerator(this.app, this.settings);
 
 		this.addCommand({
-			id: 'open-sample-modal',
-			name: 'Open Sample Modal',
-			// callback: () => {
-			// 	console.log('Simple Callback');
-			// },
+			id: 'generate-month-report',
+			name: 'Generate month report',
+			callback: () => {
+				console.log(this);
+				console.log("callback");
+			},
 			checkCallback: (checking: boolean) => {
-				let leaf = this.app.workspace.activeLeaf;
-				if (leaf) {
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-					return true;
+				console.log("checking: " + checking);
+
+				// Если выполнение команды
+				if (!checking) {
+					console.log("executing");
+					this.generator.generateCurMonth();
 				}
-				return false;
+
+				return true;
 			}
 		});
-
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		this.registerCodeMirror((cm: CodeMirror.Editor) => {
-			console.log('codemirror', cm);
-		});
-
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
-
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
 
 	onunload() {
@@ -58,31 +41,14 @@ export default class MyPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign({}, await this.loadData());
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
 }
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		let {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		let {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class SampleSettingTab extends PluginSettingTab {
+class SimpleSettingsTab extends PluginSettingTab {
 	plugin: MyPlugin;
 
 	constructor(app: App, plugin: MyPlugin) {
@@ -91,22 +57,85 @@ class SampleSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		let {containerEl} = this;
-
+		let { containerEl } = this;
 		containerEl.empty();
+		containerEl.createEl('h2', {
+			text: "Settings for MonthReportGenerator",
+		});
 
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
+		let settings = this.plugin.settings;
+		this.getSettings(containerEl, "resultFilePath", settings, set => set.resultFileDirPath, (set, val) => set.resultFileDirPath = val);
+		this.getSettings(containerEl, "resultFileNameTemplate", settings, set => set.resultFileNameTemplate, (set, val) => set.resultFileNameTemplate = val);
+
+		let root = this.app.vault.getRoot();
+		let children = this.getRecursiveDirs(root);
+		let isExists = !!children.find(ch => ch.path === settings.dailyFileDirPath);
+
+		if (!isExists) {
+			settings.dailyFileDirPath = "/";
+			this.plugin.saveData(settings);
+		}
+
+		let val = this.plugin.settings.dailyFileDirPath;
+
 
 		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue('')
-				.onChange(async (value) => {
-					console.log('Secret: ' + value);
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("dailyFilePath")
+			.setDesc("dailyFilePath")
+			.addDropdown(dd => {
+				children.forEach(ch => {
+					dd.addOption(ch.path, ch.path);
+				});
+
+				dd
+					.setValue(val)
+					.onChange(async (value) => {
+						settings.dailyFileDirPath = value;
+						this.plugin.saveData(settings);
+					});
+			});
+
+		this.getSettings(containerEl, "dailyFileNameTemplate", settings, set => set.dailyFileNameTemplate, (set, val) => set.dailyFileNameTemplate = val);
 	}
+
+	private getRecursiveDirs(root: TFolder): TFolder[] {
+		let result: TFolder[] = [];
+		let stack: TFolder[] = [];
+
+		stack.push(root);
+
+		while (stack.length != 0) {
+			let file = stack.shift();
+			result.push(file);
+
+			let folder = file as TFolder;
+			let children = folder.children.reverse();
+			children.forEach(ch => {
+				if (ch instanceof TFolder) {
+					stack.unshift(ch);
+				}
+			});
+		}
+
+
+		return result;
+	}
+
+	private getSettings(containerEl: HTMLElement, settingName: string, settings: IPluginSettings, propGetter: (settings: IPluginSettings) => string, propSetter: (settings: IPluginSettings, value: string) => void): Setting {
+		let value = propGetter(settings) ?? "";
+
+		return new Setting(containerEl)
+			.setName(settingName)
+			.setDesc(settingName)
+			.addText(text => {
+				text
+					.setPlaceholder(settingName)
+					.setValue(value)
+					.onChange(async (value) => {
+						propSetter(settings, value);
+						this.plugin.saveData(settings);
+					});
+			});
+	}
+
 }
