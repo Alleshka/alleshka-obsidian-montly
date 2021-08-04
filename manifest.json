@@ -1,9 +1,9 @@
 {
-	"id": "alleshka-month-report-generator",
-	"name": "Month report generator",
+	"id": "alleshka-monthly",
+	"name": "Monthly",
 	"version": "1.0.1",
 	"minAppVersion": "0.9.12",
-	"description": "This is a sample plugin for Obsidian. This plugin demonstrates some of the capabilities of the Obsidian API.",
+	"description": "Monly report generator from daily notes",
 	"author": "Alleshka",
 	"isDesktopOnly": false
 }

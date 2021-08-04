@@ -16,8 +16,8 @@ export default class MyPlugin extends Plugin {
 		this.generator = new MonthlyhReportGenerator(this.app, this.settings);
 
 		this.addCommand({
-			id: 'generate-month-report',
-			name: 'Generate month report',
+			id: 'generate-monthly-report',
+			name: 'Generate monthly report',
 			callback: () => {
 				console.log(this);
 				console.log("callback");
