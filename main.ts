@@ -32,7 +32,7 @@ export default class MyPlugin extends Plugin {
 	private _initCommands(): void {
 		this.addCommand({
 			id: "open-cur-month",
-			name: "Open cur month",
+			name: "Open cur monthly note",
 			checkCallback: (checking: boolean) => {
 				if (!checking) {
 					let app = this.app;
@@ -53,7 +53,7 @@ export default class MyPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'generate-monthly-report',
-			name: 'Generate monthly report',
+			name: 'Generate monthly note',
 			checkCallback: (checking: boolean) => {
 
 				if (!checking) {
@@ -66,7 +66,7 @@ export default class MyPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'open-prev-month',
-			name: "Open prev month",
+			name: "Open prev monthly note",
 			checkCallback: (checking: boolean) => {
 				return this.checkOpen(checking, () => this.generator.openPrevMonth());
 			}
@@ -74,21 +74,29 @@ export default class MyPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'open-next-month',
-			name: "Open next month",
+			name: "Open next monthly note",
 			checkCallback: (checking: boolean) => {
 				return this.checkOpen(checking, () => this.generator.openNextMonth());
 			}
 		});
+
+		this.addCommand({
+			id: "regenerate-month-note",
+			name: "Regenerate monthly note",
+			checkCallback: (checking: boolean) => {
+				return this.checkOpen(checking, (fileName: string) => this.generator.regenerate(fileName));
+			}
+		});
 	}
 
-	private checkOpen(checking: boolean, action: () => Promise<void>): boolean {
+	private checkOpen(checking: boolean, action: (fileName: string) => Promise<void>): boolean {
 		let ws = this.app.workspace;
 		let file = ws.getActiveFile();
 		if (!!file) {
 			let result = file.parent.path === this.settings.resultFileDirPath;
 
 			if (!checking && result) {
-				action();
+				action(file.basename);
 			}
 
 			return result;

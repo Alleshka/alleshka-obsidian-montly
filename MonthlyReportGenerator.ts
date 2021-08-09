@@ -1,7 +1,6 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting, TAbstractFile, TFolder, Vault, TFile, View, FuzzySuggestModal } from 'obsidian';
+import { App, Notice, TFile } from 'obsidian';
 import { IPluginSettings } from 'IPluginSettings';
 import { moment } from 'obsidian';
-import { resolve } from 'path';
 
 export class MonthlyhReportGenerator {
     private settings: IPluginSettings;
@@ -13,27 +12,31 @@ export class MonthlyhReportGenerator {
     }
 
     public generateCurMonth(): Promise<void> {
+        let curDate = moment().format(this.settings.resultFileNameTemplate);
+        return this.regenerate(curDate);
+    }
+
+    public regenerate(fileName: string): Promise<void> {
         let that = this;
         let app = that.app;
         let vault = app.vault;
         let workSpace = app.workspace;
 
-        let curDate = moment().format(this.settings.resultFileNameTemplate);
-        let pathToCurFile = this.settings.resultFileDirPath + "/" + curDate + ".md";
+        let date = moment(fileName, this.settings.resultFileNameTemplate).format(this.settings.resultFileNameTemplate);
+        let pathToFile = this.settings.resultFileDirPath + "/" + date + ".md";
 
         let promise = null;
 
-        let curFile = vault.getAbstractFileByPath(pathToCurFile) as TFile;
-
+        let curFile = vault.getAbstractFileByPath(pathToFile) as TFile;
         if (!curFile) {
-            promise = vault.create(pathToCurFile, "");
+            promise = vault.create(pathToFile, "");
         }
         else {
             promise = Promise.resolve(curFile);
         }
 
         promise = promise.then((resultFile: TFile) => {
-            let dates = Array.from({ length: moment(curDate).daysInMonth() }, (x, i) => moment().startOf('month').add(i, 'days').format(this.settings.dailyFileNameTemplate));
+            let dates = Array.from({ length: moment(date).daysInMonth() }, (x, i) => moment(date).startOf('month').add(i, 'days').format(this.settings.dailyFileNameTemplate));
             let result: string[] = [];
             dates.forEach(date => {
                 let file = vault.getAbstractFileByPath(this.settings.dailyFileDirPath + "/" + date + ".md");
@@ -50,7 +53,7 @@ export class MonthlyhReportGenerator {
             return resultFile;
         });
 
-        promise = promise.then((resultFile) => workSpace.activeLeaf.openFile(resultFile));
+        promise = promise.then((resultFile: TFile) => workSpace.activeLeaf.openFile(resultFile));
 
         return promise;
     }
