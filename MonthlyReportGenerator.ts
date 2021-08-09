@@ -13,7 +13,6 @@ export class MonthlyhReportGenerator {
     }
 
     public generateCurMonth(): Promise<void> {
-
         let that = this;
         let app = that.app;
         let vault = app.vault;
@@ -54,5 +53,28 @@ export class MonthlyhReportGenerator {
         promise = promise.then((resultFile) => workSpace.activeLeaf.openFile(resultFile));
 
         return promise;
+    }
+
+    public openPrevMonth(): Promise<void> {
+        return this.openMonth(index => index - 1, (index, length) => index == 0);
+    }
+
+    public openNextMonth(): Promise<void> {
+        return this.openMonth(index => index + 1, (index, length) => index == length - 1);
+    }
+
+    private openMonth(indexIterator: (index: number) => number, indexChecker: (index: number, length: number) => boolean): Promise<void> {
+        let ws = this.app.workspace;
+        let file = ws.getActiveFile();
+
+        let notes = file.parent.children.filter(x => x instanceof TFile);
+        let index = notes.findIndex(x => x == file);
+        if (indexChecker(index, notes.length)) {
+            new Notice("File does't exist");
+            return Promise.resolve();
+        }
+        else {
+            return ws.activeLeaf.openFile(notes[indexIterator(index)] as TFile);
+        }
     }
 }

@@ -55,19 +55,48 @@ export default class MyPlugin extends Plugin {
 			id: 'generate-monthly-report',
 			name: 'Generate monthly report',
 			checkCallback: (checking: boolean) => {
-				console.log("checking: " + checking);
 
-				// Если выполнение команды
 				if (!checking) {
-					console.log("executing");
 					this.generator.generateCurMonth();
 				}
 
 				return true;
 			}
 		});
+
+		this.addCommand({
+			id: 'open-prev-month',
+			name: "Open prev month",
+			checkCallback: (checking: boolean) => {
+				return this.checkOpen(checking, () => this.generator.openPrevMonth());
+			}
+		});
+
+		this.addCommand({
+			id: 'open-next-month',
+			name: "Open next month",
+			checkCallback: (checking: boolean) => {
+				return this.checkOpen(checking, () => this.generator.openNextMonth());
+			}
+		});
+	}
+
+	private checkOpen(checking: boolean, action: () => Promise<void>): boolean {
+		let ws = this.app.workspace;
+		let file = ws.getActiveFile();
+		if (!!file) {
+			let result = file.parent.path === this.settings.resultFileDirPath;
+
+			if (!checking && result) {
+				action();
+			}
+
+			return result;
+		}
+		return false;
 	}
 }
+
 class SimpleSettingsTab extends PluginSettingTab {
 	plugin: MyPlugin;
 
